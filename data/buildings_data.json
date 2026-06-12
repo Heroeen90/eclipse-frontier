@@ -1,0 +1,77 @@
+{
+  "house": {
+    "id": "house",
+    "name": "House",
+    "description": "A basic dwelling that provides shelter and happiness",
+    "health": 150,
+    "construction_time": 10.0,
+    "cost": {
+      "wood": 20,
+      "stone": 10
+    },
+    "level": 1,
+    "max_level": 5,
+    "upgrade_cost": {
+      "wood": 30,
+      "stone": 20
+    }
+  },
+  "storage": {
+    "id": "storage",
+    "name": "Storage",
+    "description": "Expand your storage capacity to hold more resources",
+    "health": 100,
+    "construction_time": 8.0,
+    "cost": {
+      "wood": 30,
+      "stone": 20,
+      "iron": 5
+    },
+    "level": 1,
+    "max_level": 5,
+    "upgrade_cost": {
+      "wood": 40,
+      "stone": 30,
+      "iron": 10
+    }
+  },
+  "mine": {
+    "id": "mine",
+    "name": "Mine",
+    "description": "Extract iron ore to gather iron resources",
+    "health": 120,
+    "construction_time": 15.0,
+    "cost": {
+      "wood": 40,
+      "stone": 50
+    },
+    "level": 1,
+    "max_level": 5,
+    "upgrade_cost": {
+      "wood": 50,
+      "stone": 40,
+      "iron": 20
+    },
+    "production_rate": 2.0,
+    "production_interval": 5.0
+  },
+  "farm": {
+    "id": "farm",
+    "name": "Farm",
+    "description": "Cultivate crops to produce food",
+    "health": 100,
+    "construction_time": 12.0,
+    "cost": {
+      "wood": 35,
+      "stone": 25
+    },
+    "level": 1,
+    "max_level": 5,
+    "upgrade_cost": {
+      "wood": 35,
+      "stone": 25
+    },
+    "production_rate": 1.5,
+    "production_interval": 8.0
+  }
+}
