@@ -1,0 +1,109 @@
+{
+  "quests": [
+    {
+      "id": "quest_001",
+      "title": "Getting Started",
+      "description": "Collect 10 pieces of wood to begin your base",
+      "type": 0,
+      "giver": "Tutorial Guide",
+      "rewards": {
+        "experience": 100,
+        "resources": {
+          "wood": 5,
+          "stone": 3
+        }
+      }
+    },
+    {
+      "id": "quest_002",
+      "title": "Build Your First Home",
+      "description": "Build a house to establish your base",
+      "type": 0,
+      "giver": "Tutorial Guide",
+      "rewards": {
+        "experience": 150,
+        "resources": {
+          "food": 20
+        }
+      }
+    },
+    {
+      "id": "quest_003",
+      "title": "Storage Solutions",
+      "description": "Build a storage unit to expand your carrying capacity",
+      "type": 0,
+      "giver": "Merchant",
+      "rewards": {
+        "experience": 200,
+        "resources": {
+          "stone": 15
+        }
+      }
+    },
+    {
+      "id": "quest_004",
+      "title": "Mining Operations",
+      "description": "Build a mine to extract iron ore",
+      "type": 0,
+      "giver": "Engineer",
+      "rewards": {
+        "experience": 300,
+        "resources": {
+          "iron": 10
+        }
+      }
+    },
+    {
+      "id": "quest_005",
+      "title": "Agricultural Development",
+      "description": "Build a farm to produce food",
+      "type": 0,
+      "giver": "Farmer",
+      "rewards": {
+        "experience": 250,
+        "resources": {
+          "food": 30
+        }
+      }
+    },
+    {
+      "id": "side_001",
+      "title": "Monster Hunter",
+      "description": "Defeat 5 skeletons",
+      "type": 1,
+      "giver": "Warrior",
+      "rewards": {
+        "experience": 75,
+        "resources": {
+          "stone": 10
+        }
+      }
+    },
+    {
+      "id": "side_002",
+      "title": "Treasure Hunter",
+      "description": "Find 3 treasure chests",
+      "type": 1,
+      "giver": "Adventurer",
+      "rewards": {
+        "experience": 100,
+        "resources": {
+          "iron": 5
+        }
+      }
+    },
+    {
+      "id": "side_003",
+      "title": "Resource Gatherer",
+      "description": "Collect 50 wood",
+      "type": 1,
+      "giver": "Lumberjack",
+      "rewards": {
+        "experience": 50,
+        "resources": {
+          "food": 15
+        }
+      }
+    }
+  ]
+}
