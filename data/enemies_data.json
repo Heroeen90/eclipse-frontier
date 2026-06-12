@@ -1,0 +1,40 @@
+{
+  "enemies": [
+    {
+      "id": "skeleton",
+      "name": "Skeleton",
+      "description": "A dangerous undead creature",
+      "type": "skeleton",
+      "health": 30,
+      "attack_damage": 5.0,
+      "speed": 100,
+      "detection_range": 200,
+      "attack_range": 40,
+      "experience_reward": 50
+    },
+    {
+      "id": "goblin",
+      "name": "Goblin",
+      "description": "A cunning small creature",
+      "type": "goblin",
+      "health": 25,
+      "attack_damage": 4.0,
+      "speed": 130,
+      "detection_range": 180,
+      "attack_range": 35,
+      "experience_reward": 40
+    },
+    {
+      "id": "boss",
+      "name": "Dark Lord",
+      "description": "A formidable boss enemy",
+      "type": "boss",
+      "health": 200,
+      "attack_damage": 15.0,
+      "speed": 80,
+      "detection_range": 300,
+      "attack_range": 60,
+      "experience_reward": 500
+    }
+  ]
+}
