@@ -5,9 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -15,6 +12,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -22,180 +21,95 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install System Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y wget unzip zip adb
+          sudo apt-get install -y wget unzip
+          echo "Dependencies installed"
 
-      - name: Download Godot 4.2.2
+      - name: Download Godot
         run: |
-          wget -q \
-            "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip" \
-            -O godot.zip
+          wget -q "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip" -O godot.zip
           unzip -q godot.zip
           mv "Godot_v4.2.2-stable_linux.x86_64" godot
           chmod +x godot
-          ls -la godot
-          echo "Godot downloaded"
+          echo "Godot ready"
 
-      - name: Download Export Templates
+      - name: Download Templates
         run: |
           mkdir -p ~/.local/share/godot/export_templates/4.2.2.stable
-          wget -q \
-            "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_export_templates.tpz" \
-            -O templates.tpz
-          unzip -q templates.tpz -d /tmp/godot_templates
-          mv /tmp/godot_templates/templates/* \
-             ~/.local/share/godot/export_templates/4.2.2.stable/
-          echo "Templates installed:"
-          ls ~/.local/share/godot/export_templates/4.2.2.stable/ | grep android
+          wget -q "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_export_templates.tpz" -O templates.tpz
+          unzip -q templates.tpz -d /tmp/tpl
+          mv /tmp/tpl/templates/* ~/.local/share/godot/export_templates/4.2.2.stable/
+          echo "Templates ready"
+          ls ~/.local/share/godot/export_templates/4.2.2.stable/ | grep -i android
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android Build Tools
+      - name: Install NDK
         run: |
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;23.2.8568313" 2>/dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
-          echo "Android tools installed"
+          sdkmanager "ndk;23.2.8568313" 2>/dev/null
+          echo "NDK installed"
 
-      - name: Create Debug Keystore
+      - name: Create Keystore
         run: |
-          mkdir -p "$HOME/android_keys"
           keytool -genkey -v \
-            -keystore "$HOME/android_keys/debug.keystore" \
+            -keystore debug.keystore \
             -alias androiddebugkey \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
             -storepass android \
             -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
-          echo "KEYSTORE_PATH=$HOME/android_keys/debug.keystore" >> $GITHUB_ENV
-          echo "Keystore ready"
+            -dname "CN=Debug,O=Debug,C=US" 2>/dev/null
+          echo "Keystore created"
 
-      - name: Configure Godot Editor Settings
+      - name: Setup Editor Settings
         run: |
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.tres << 'SETTINGS'
-[gd_resource type="EditorSettings" format=3]
-
-[resource]
-export/android/android_sdk_path = "/usr/local/lib/android/sdk"
-export/android/java_sdk_path = "/usr/lib/jvm/temurin-17-amd64"
-export/android/debug_keystore = "/root/android_keys/debug.keystore"
-export/android/debug_keystore_user = "androiddebugkey"
-export/android/debug_keystore_pass = "android"
-SETTINGS
-          echo "Editor settings configured"
+          JAVA_PATH=$(readlink -f $(which java) | sed 's|/bin/java||')
+          echo "Java path: $JAVA_PATH"
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_PATH" > ~/.config/godot/editor_settings-4.tres
           cat ~/.config/godot/editor_settings-4.tres
 
-      - name: Fix Export Presets
+      - name: Update Export Presets Keystore
         run: |
-          cat > export_presets.cfg << 'PRESETS'
-[preset.0]
+          KEYSTORE_PATH="$(pwd)/debug.keystore"
+          sed -i "s|keystore/debug=\"\"|keystore/debug=\"$KEYSTORE_PATH\"|g" export_presets.cfg
+          echo "Export presets updated with keystore"
+          grep keystore export_presets.cfg
 
-name="Android"
-platform="Android"
-runnable=true
-dedicated_server=false
-custom_features=""
-export_filter="all_resources"
-include_filter=""
-exclude_filter=""
-export_path="build/eclipse-frontier.apk"
-encryption_include_filters=""
-encryption_exclude_filters=""
-encrypt_pck=false
-encrypt_directory=false
-
-[preset.0.options]
-
-custom_template/debug=""
-custom_template/release=""
-gradle_build/use_gradle_build=false
-gradle_build/export_format=0
-architectures/armeabi-v7a=true
-architectures/arm64-v8a=true
-architectures/x86=false
-architectures/x86_64=false
-keystore/debug="$HOME/android_keys/debug.keystore"
-keystore/debug_user="androiddebugkey"
-keystore/debug_password="android"
-keystore/release=""
-keystore/release_user=""
-keystore/release_password=""
-version/code=1
-version/name="0.1.0"
-package/unique_name="com.eclipsefrontier.game"
-package/name="Eclipse Frontier"
-package/signed=true
-package/classify_as_game=true
-screen/immersive_mode=true
-screen/support_small=false
-screen/support_normal=true
-screen/support_large=true
-screen/support_xlarge=true
-screen/keep_screen_on=true
-PRESETS
-          echo "Export presets updated"
-
-      - name: Create Build Directory
+      - name: Import Project
         run: |
-          mkdir -p build
-          echo "Build dir ready"
+          timeout 90 ./godot --headless --path "$(pwd)" --import --quit-after 30 2>&1 | tail -10 || true
+          echo "Import done"
+          sleep 2
 
-      - name: Import Godot Project
-        run: |
-          timeout 120 ./godot \
-            --headless \
-            --path "$(pwd)" \
-            --import \
-            --quit-after 60 2>&1 | tail -20 || true
-          echo "Import step done"
-          sleep 3
+      - name: Create Build Dir
+        run: mkdir -p build
 
-      - name: Show Project Files
+      - name: Build APK
         run: |
-          echo "=== Project Root ==="
-          ls -la
-          echo "=== Scenes ==="
-          find scenes/ -name "*.tscn" 2>/dev/null | head -10 || echo "No scenes found"
-          echo "=== Scripts ==="
-          find scripts/ -name "*.gd" 2>/dev/null | wc -l || echo "0"
-          echo "=== Export Presets ==="
-          cat export_presets.cfg | head -10
-
-      - name: Build Android APK
-        run: |
-          set -e
-          echo "Starting build..."
           ./godot \
             --headless \
             --path "$(pwd)" \
             --export-debug "Android" \
-            "$(pwd)/build/eclipse-frontier.apk" \
-            --verbose 2>&1
-          echo "Build command finished"
+            "$(pwd)/build/eclipse-frontier.apk" 2>&1
+          echo "Build finished with code: $?"
 
-      - name: Verify APK
+      - name: Verify Build
         run: |
-          echo "=== Build folder contents ==="
-          ls -lah build/ || echo "Build folder empty"
-
           if [ -f "build/eclipse-frontier.apk" ]; then
-            SIZE=$(du -sh "build/eclipse-frontier.apk" | cut -f1)
-            echo "SUCCESS: APK size = $SIZE"
+            echo "SUCCESS"
+            ls -lah build/eclipse-frontier.apk
           else
-            echo "FAILED: APK not created"
+            echo "FAILED - APK not found"
+            ls -la build/ || echo "build/ is empty"
             exit 1
           fi
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         if: success()
         with:
@@ -203,12 +117,10 @@ PRESETS
           path: build/eclipse-frontier.apk
           retention-days: 30
 
-      - name: Upload Logs on Failure
+      - name: Upload Logs
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: build-logs
-          path: |
-            ~/.local/share/godot/
-            ~/.config/godot/
+          name: failure-logs
+          path: ~/.config/godot/
           retention-days: 7
