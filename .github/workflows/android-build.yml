@@ -23,90 +23,71 @@ jobs:
           java-version: 17
 
       - name: Install Dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y wget unzip python3 python3-pip
-          pip3 install pillow 2>/dev/null || true
+        run: sudo apt-get update -qq && sudo apt-get install -y wget unzip python3 python3-pip && pip3 install pillow 2>/dev/null || true
 
-      - name: Generate Placeholder Assets
+      - name: Create Asset Script
         run: |
-          python3 << 'PYEOF'
-          from PIL import Image, ImageDraw
-          import os, struct, wave, array
+          cat > /tmp/gen_assets.py << 'EOF'
+          import os
+          try:
+            from PIL import Image, ImageDraw
+            has_pil = True
+          except:
+            has_pil = False
 
-          # PNG files to create
           png_files = [
-            "assets/sprites/ui/icon.png",
-            "assets/sprites/ui/button_normal.png",
-            "assets/sprites/ui/button_pressed.png",
-            "assets/sprites/ui/button_hover.png",
-            "assets/sprites/tiles/grass.png",
-            "assets/sprites/tiles/water.png",
-            "assets/sprites/tiles/mountain.png",
-            "assets/sprites/tiles/forest.png",
-            "assets/sprites/resources/wood.png",
-            "assets/sprites/resources/stone.png",
-            "assets/sprites/resources/iron.png",
-            "assets/sprites/resources/food.png",
-            "assets/sprites/player/idle.png",
-            "assets/sprites/player/walk.png",
-            "assets/sprites/player/run.png",
-            "assets/sprites/buildings/house.png",
-            "assets/sprites/buildings/storage.png",
-            "assets/sprites/buildings/mine.png",
-            "assets/sprites/buildings/farm.png",
-            "assets/ui/boot_splash.png",
+            ("assets/sprites/ui/icon.png", (100,150,255)),
+            ("assets/sprites/ui/button_normal.png", (80,80,120)),
+            ("assets/sprites/ui/button_pressed.png", (60,60,100)),
+            ("assets/sprites/ui/button_hover.png", (100,100,140)),
+            ("assets/sprites/tiles/grass.png", (34,139,34)),
+            ("assets/sprites/tiles/water.png", (30,100,200)),
+            ("assets/sprites/tiles/mountain.png", (120,100,80)),
+            ("assets/sprites/tiles/forest.png", (0,100,0)),
+            ("assets/sprites/resources/wood.png", (139,90,43)),
+            ("assets/sprites/resources/stone.png", (150,150,150)),
+            ("assets/sprites/resources/iron.png", (100,100,130)),
+            ("assets/sprites/resources/food.png", (200,50,50)),
+            ("assets/sprites/player/idle.png", (50,100,200)),
+            ("assets/sprites/player/walk.png", (50,150,200)),
+            ("assets/sprites/player/run.png", (50,200,200)),
+            ("assets/sprites/buildings/house.png", (180,140,100)),
+            ("assets/sprites/buildings/storage.png", (160,120,80)),
+            ("assets/sprites/buildings/mine.png", (100,80,60)),
+            ("assets/sprites/buildings/farm.png", (100,180,60)),
+            ("assets/ui/boot_splash.png", (20,20,40)),
           ]
 
-          colors = {
-            "icon": (100, 150, 255),
-            "button": (80, 80, 120),
-            "grass": (34, 139, 34),
-            "water": (30, 100, 200),
-            "mountain": (120, 100, 80),
-            "forest": (0, 100, 0),
-            "wood": (139, 90, 43),
-            "stone": (150, 150, 150),
-            "iron": (100, 100, 130),
-            "food": (200, 50, 50),
-            "idle": (50, 100, 200),
-            "walk": (50, 150, 200),
-            "run": (50, 200, 200),
-            "house": (180, 140, 100),
-            "storage": (160, 120, 80),
-            "mine": (100, 80, 60),
-            "farm": (100, 180, 60),
-            "default": (128, 128, 128),
-          }
+          for path, color in png_files:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if has_pil:
+              img = Image.new("RGB", (64,64), color=color)
+              draw = ImageDraw.Draw(img)
+              draw.rectangle([2,2,61,61], outline=(255,255,255), width=2)
+              img.save(path)
+            else:
+              import struct, zlib
+              def make_png(w, h, r, g, b):
+                raw = b""
+                for y in range(h):
+                  raw += b"\x00"
+                  for x in range(w):
+                    raw += bytes([r,g,b])
+                compressed = zlib.compress(raw)
+                chunks = b""
+                def chunk(t, d):
+                  c = struct.pack(">I", len(d)) + t + d
+                  return c + struct.pack(">I", zlib.crc32(t+d) & 0xffffffff)
+                chunks += chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                chunks += chunk(b"IDAT", compressed)
+                chunks += chunk(b"IEND", b"")
+                return b"\x89PNG\r\n\x1a\n" + chunks
+              data = make_png(64, 64, color[0], color[1], color[2])
+              with open(path, "wb") as f:
+                f.write(data)
+            print("OK: " + path)
 
-          for png_path in png_files:
-            os.makedirs(os.path.dirname(png_path), exist_ok=True)
-            color = colors.get("default")
-            for key in colors:
-              if key in png_path.lower():
-                color = colors[key]
-                break
-            img = Image.new("RGB", (64, 64), color=color)
-            draw = ImageDraw.Draw(img)
-            draw.rectangle([2, 2, 61, 61], outline=(255,255,255), width=2)
-            img.save(png_path)
-            print(f"Created: {png_path}")
-
-          # Create boot splash
-          os.makedirs("assets/ui", exist_ok=True)
-          splash = Image.new("RGB", (1080, 1920), color=(20, 20, 40))
-          draw = ImageDraw.Draw(splash)
-          draw.rectangle([440, 900, 640, 1020], fill=(100, 150, 255))
-          splash.save("assets/ui/boot_splash.png")
-          print("Created boot splash")
-          PYEOF
-          echo "Assets generated"
-
-      - name: Generate Audio Placeholders
-        run: |
-          python3 << 'PYEOF'
-          import os, struct, math
-
+          ogg = bytes([0x4F,0x67,0x67,0x53,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x1E,0x01,0x76,0x6F,0x72,0x62,0x69,0x73,0x00,0x00,0x00,0x00,0x01,0x44,0xAC,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x77,0x1B,0x00,0xFF,0xFF,0xFF,0xFF,0xB8,0x01])
           audio_files = [
             "assets/audio/music/menu_theme.ogg",
             "assets/audio/music/gameplay_theme.ogg",
@@ -116,31 +97,20 @@ jobs:
             "assets/audio/sfx/collect.ogg",
             "assets/audio/sfx/level_up.ogg",
           ]
+          for path in audio_files:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+              f.write(ogg)
+            print("OK: " + path)
+          EOF
+          echo "Script created"
 
-          # Minimal valid OGG file (silent)
-          minimal_ogg = bytes([
-            0x4F,0x67,0x67,0x53,0x00,0x02,0x00,0x00,
-            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-            0x01,0x1E,0x01,0x76,0x6F,0x72,0x62,0x69,
-            0x73,0x00,0x00,0x00,0x00,0x01,0x44,0xAC,
-            0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x77,
-            0x1B,0x00,0xFF,0xFF,0xFF,0xFF,0xB8,0x01
-          ])
-
-          for audio_path in audio_files:
-            os.makedirs(os.path.dirname(audio_path), exist_ok=True)
-            with open(audio_path, 'wb') as f:
-              f.write(minimal_ogg)
-            print(f"Created: {audio_path}")
-          PYEOF
-          echo "Audio placeholders created"
+      - name: Generate Assets
+        run: python3 /tmp/gen_assets.py
 
       - name: Download Godot
         run: |
-          wget -q \
-            "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip" \
-            -O godot.zip
+          wget -q "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip" -O godot.zip
           unzip -q godot.zip
           mv "Godot_v4.2.2-stable_linux.x86_64" godot
           chmod +x godot
@@ -149,9 +119,7 @@ jobs:
       - name: Download Templates
         run: |
           mkdir -p ~/.local/share/godot/export_templates/4.2.2.stable
-          wget -q \
-            "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_export_templates.tpz" \
-            -O templates.tpz
+          wget -q "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_export_templates.tpz" -O templates.tpz
           unzip -q templates.tpz -d /tmp/tpl
           mv /tmp/tpl/templates/* ~/.local/share/godot/export_templates/4.2.2.stable/
           ls ~/.local/share/godot/export_templates/4.2.2.stable/ | grep android
@@ -161,75 +129,45 @@ jobs:
 
       - name: Install NDK
         run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;23.2.8568313" 2>/dev/null
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;23.2.8568313" 2>/dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
 
       - name: Create Keystore
         run: |
-          keytool -genkey -v \
-            -keystore "$(pwd)/debug.keystore" \
-            -alias androiddebugkey \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass android \
-            -keypass android \
-            -dname "CN=Debug,O=Debug,C=US" 2>/dev/null
-          echo "Keystore OK"
+          keytool -genkey -v -keystore "$(pwd)/debug.keystore" -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Debug,O=Debug,C=US" 2>/dev/null
+          ls -la debug.keystore
 
       - name: Setup Godot Config
         run: |
           mkdir -p ~/.config/godot
           JAVA_HOME_PATH=$(dirname $(dirname $(readlink -f $(which java))))
-          cat > ~/.config/godot/editor_settings-4.tres << EOF
-[gd_resource type="EditorSettings" format=3]
-
-[resource]
-export/android/android_sdk_path = "$ANDROID_HOME"
-export/android/java_sdk_path = "$JAVA_HOME_PATH"
-export/android/debug_keystore = "$(pwd)/debug.keystore"
-export/android/debug_keystore_user = "androiddebugkey"
-export/android/debug_keystore_pass = "android"
-EOF
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$ANDROID_HOME" "$JAVA_HOME_PATH" "$(pwd)" > ~/.config/godot/editor_settings-4.tres
           cat ~/.config/godot/editor_settings-4.tres
 
-      - name: Fix Export Presets Keystore
+      - name: Fix Export Presets
         run: |
           KEYSTORE="$(pwd)/debug.keystore"
           sed -i "s|keystore/debug=\"\"|keystore/debug=\"$KEYSTORE\"|g" export_presets.cfg
-          grep "keystore" export_presets.cfg
+          grep keystore export_presets.cfg
 
       - name: Import Project
         run: |
-          timeout 120 ./godot \
-            --headless \
-            --path "$(pwd)" \
-            --import \
-            --quit-after 60 2>&1 | tail -20 || true
+          timeout 120 ./godot --headless --path "$(pwd)" --import --quit-after 60 2>&1 | tail -20 || true
           sleep 3
-          echo "Import done"
 
       - name: Build APK
         run: |
           mkdir -p build
-          ./godot \
-            --headless \
-            --path "$(pwd)" \
-            --export-debug "Android" \
-            "$(pwd)/build/eclipse-frontier.apk" 2>&1
-          echo "Exit: $?"
+          ./godot --headless --path "$(pwd)" --export-debug "Android" "$(pwd)/build/eclipse-frontier.apk" 2>&1
+          echo "Build exit code: $?"
 
-      - name: Verify
+      - name: Verify APK
         run: |
           if [ -f "build/eclipse-frontier.apk" ]; then
             ls -lah build/eclipse-frontier.apk
             echo "SUCCESS"
           else
-            ls -la build/ || echo "empty"
+            ls -la build/ || echo "Build folder empty"
             exit 1
           fi
 
