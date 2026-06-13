@@ -1,190 +1,230 @@
-name: Android Build
+name: 🤖 Android Build - Eclipse Frontier
 
 on:
   push:
     branches:
       - main
+      - develop
   pull_request:
     branches:
       - main
   workflow_dispatch:
 
 env:
-  GODOT_VERSION: "4.3"
-  EXPORT_NAME: "EclipseFrontier"
-  EXPORT_PRESET: "Android"
+  GODOT_VERSION: "4.2.2"
+  GODOT_RELEASE: "stable"
+  ANDROID_SDK_VERSION: "34"
+  PROJECT_NAME: "eclipse-frontier"
+  EXPORT_NAME: "Eclipse Frontier"
 
 jobs:
   build-android:
-    name: Build Android APK
-    runs-on: ubuntu-latest
+    name: 🏗️ Build Android APK
+    runs-on: ubuntu-22.04
 
     steps:
-      # ------------------------------------------------------------
-      # 1. Checkout Repository
-      # ------------------------------------------------------------
-      - name: Checkout repository
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
+        with:
+          lfs: false
+          submodules: false
 
-      # ------------------------------------------------------------
-      # 2. Install Java (required by Android SDK / Gradle)
-      # ------------------------------------------------------------
-      - name: Set up JDK 17
+      - name: ☕ Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      # ------------------------------------------------------------
-      # 3. Cache Godot binary & export templates (speeds up future runs)
-      # ------------------------------------------------------------
-      - name: Cache Godot installation
-        id: cache-godot
+      - name: 📱 Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_SDK_VERSION }}
+          build-tools-version: "34.0.0"
+          ndk-version: "23.2.8568313"
+
+      - name: 🔧 Install Android NDK
+        run: |
+          echo "Installing Android NDK..."
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;23.2.8568313"
+          echo "NDK installed successfully"
+
+      - name: 📦 Cache Godot
         uses: actions/cache@v4
+        id: cache-godot
         with:
           path: |
             /usr/local/bin/godot
-            ~/.local/share/godot/export_templates
-          key: godot-${{ env.GODOT_VERSION }}-${{ runner.os }}
+            ~/.local/share/godot
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-linux
 
-      # ------------------------------------------------------------
-      # 4. Install Godot Engine (headless)
-      # ------------------------------------------------------------
-      - name: Download and install Godot
+      - name: ⬇️ Download Godot Engine
         if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          set -e
-          wget -q "https://downloads.tuxfamily.org/godotengine/${{ env.GODOT_VERSION }}/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip" -O godot.zip
-          unzip -q godot.zip -d godot_bin
-          chmod +x "godot_bin/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64"
-          sudo mv "godot_bin/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64" /usr/local/bin/godot
+          echo "Downloading Godot ${{ env.GODOT_VERSION }}..."
+          
+          GODOT_FILENAME="Godot_v${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}_linux.x86_64"
+          GODOT_URL="https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}/${GODOT_FILENAME}.zip"
+          
+          wget -q "$GODOT_URL" -O godot.zip
+          unzip -q godot.zip
+          mv "$GODOT_FILENAME" /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+          
+          echo "Godot downloaded and installed successfully"
           godot --version
 
-      # ------------------------------------------------------------
-      # 5. Install Godot Export Templates
-      # ------------------------------------------------------------
-      - name: Download and install export templates
+      - name: ⬇️ Download Godot Export Templates
         if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          set -e
-          mkdir -p ~/.local/share/godot/export_templates
-          wget -q "https://downloads.tuxfamily.org/godotengine/${{ env.GODOT_VERSION }}/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz" -O templates.tpz
-          unzip -q templates.tpz -d templates_extracted
-          mv templates_extracted/templates "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable"
-          ls "$HOME/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable"
+          echo "Downloading Godot export templates..."
+          
+          TEMPLATES_FILENAME="Godot_v${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}_export_templates.tpz"
+          TEMPLATES_URL="https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}/${TEMPLATES_FILENAME}"
+          
+          wget -q "$TEMPLATES_URL" -O templates.tpz
+          
+          mkdir -p ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.${{ env.GODOT_RELEASE }}
+          unzip -q templates.tpz -d /tmp/templates
+          
+          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.${{ env.GODOT_RELEASE }}/
+          
+          echo "Export templates installed successfully"
+          ls ~/.local/share/godot/export_templates/
 
-      # ------------------------------------------------------------
-      # 6. Install Android Build Dependencies (SDK / NDK)
-      # ------------------------------------------------------------
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install required Android SDK packages
+      - name: 🔑 Setup Debug Keystore
         run: |
-          set -e
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "cmdline-tools;latest" \
-            "ndk;23.2.8568313" > /dev/null
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "Setting up debug keystore..."
+          
+          mkdir -p android
+          
+          keytool -genkey -v \
+            -keystore android/debug.keystore \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass android \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+          
+          echo "Debug keystore created successfully"
 
-      # ------------------------------------------------------------
-      # 7. Generate Debug Keystore (used by export_presets.cfg)
-      # ------------------------------------------------------------
-      - name: Generate Android debug keystore
+      - name: 📂 Create Build Directory
         run: |
-          set -e
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkey -v \
-              -keystore "$HOME/.android/debug.keystore" \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Eclipse Frontier Debug,O=EclipseFrontier,C=US"
-          fi
+          mkdir -p build
+          echo "Build directory created"
 
-      # ------------------------------------------------------------
-      # 8. Configure Godot Editor Settings (Android SDK path)
-      # ------------------------------------------------------------
-      - name: Configure Godot editor settings for Android
+      - name: 🔄 Import Project
         run: |
-          set -e
-          mkdir -p "$HOME/.config/godot"
-          cat > "$HOME/.config/godot/editor_settings-4.tres" << EOF
-          [gd_resource type="EditorSettings" format=3]
+          echo "Importing Godot project..."
+          
+          timeout 120 godot \
+            --headless \
+            --path . \
+            --import \
+            --quit || true
+          
+          echo "Project import completed"
 
-          [resource]
-          export/android/android_sdk_path = "${ANDROID_HOME}"
-          export/android/debug_keystore = "${HOME}/.android/debug.keystore"
-          export/android/debug_keystore_user = "androiddebugkey"
-          export/android/debug_keystore_pass = "android"
-          export/android/force_system_user = false
-          EOF
-
-      # ------------------------------------------------------------
-      # 9. Import Project (generates .godot cache)
-      # ------------------------------------------------------------
-      - name: Import Godot project
+      - name: 📱 Export Android APK (Debug)
         run: |
-          set -e
-          godot --headless --editor --quit --import || true
-          godot --headless --editor --quit --import
+          echo "Building Android Debug APK..."
+          
+          godot \
+            --headless \
+            --path . \
+            --export-debug "Android" \
+            "build/${{ env.PROJECT_NAME }}-debug.apk" \
+            --quit
+          
+          echo "Debug APK build completed"
 
-      # ------------------------------------------------------------
-      # 10. Build Android APK
-      # ------------------------------------------------------------
-      - name: Create build output directory
-        run: mkdir -p build/android
-
-      - name: Export Android APK (Debug)
+      - name: 📱 Export Android APK (Release)
         run: |
-          set -e
-          godot --headless --export-debug "${{ env.EXPORT_PRESET }}" "build/android/${{ env.EXPORT_NAME }}.apk"
+          echo "Building Android Release APK..."
+          
+          godot \
+            --headless \
+            --path . \
+            --export-release "Android" \
+            "build/${{ env.PROJECT_NAME }}-release.apk" \
+            --quit
+          
+          echo "Release APK build completed"
 
-      # ------------------------------------------------------------
-      # 11. Verify Build Output
-      # ------------------------------------------------------------
-      - name: Verify APK was created
+      - name: ✅ Verify APK Files
         run: |
-          set -e
-          if [ -f "build/android/${{ env.EXPORT_NAME }}.apk" ]; then
-            echo "✅ APK build succeeded."
-            ls -lh "build/android/${{ env.EXPORT_NAME }}.apk"
+          echo "=== Verifying APK files ==="
+          
+          if [ -f "build/${{ env.PROJECT_NAME }}-debug.apk" ]; then
+            DEBUG_SIZE=$(du -sh "build/${{ env.PROJECT_NAME }}-debug.apk" | cut -f1)
+            echo "✅ Debug APK: $DEBUG_SIZE"
           else
-            echo "❌ APK build failed: file not found."
+            echo "❌ Debug APK not found!"
             exit 1
           fi
+          
+          if [ -f "build/${{ env.PROJECT_NAME }}-release.apk" ]; then
+            RELEASE_SIZE=$(du -sh "build/${{ env.PROJECT_NAME }}-release.apk" | cut -f1)
+            echo "✅ Release APK: $RELEASE_SIZE"
+          else
+            echo "⚠️ Release APK not found (may be expected for unsigned builds)"
+          fi
+          
+          echo ""
+          echo "=== Build Directory Contents ==="
+          ls -lh build/
 
-      # ------------------------------------------------------------
-      # 12. Upload APK as Build Artifact
-      # ------------------------------------------------------------
-      - name: Upload APK artifact
+      - name: 📤 Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.EXPORT_NAME }}-debug-apk
-          path: build/android/${{ env.EXPORT_NAME }}.apk
+          name: eclipse-frontier-debug-apk
+          path: build/${{ env.PROJECT_NAME }}-debug.apk
           retention-days: 30
           if-no-files-found: error
 
-      # ------------------------------------------------------------
-      # 13. Show Build Summary / Logs
-      # ------------------------------------------------------------
-      - name: Build summary
+      - name: 📤 Upload Release APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eclipse-frontier-release-apk
+          path: build/${{ env.PROJECT_NAME }}-release.apk
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: 📋 Show Build Logs
         if: always()
         run: |
-          echo "==================================================="
-          echo "Eclipse Frontier - Android Build Summary"
-          echo "==================================================="
-          echo "Godot version : ${{ env.GODOT_VERSION }}"
-          echo "Export preset : ${{ env.EXPORT_PRESET }}"
-          echo "Output file   : build/android/${{ env.EXPORT_NAME }}.apk"
-          echo "Status        : ${{ job.status }}"
-          echo "==================================================="
+          echo "=== Build Information ==="
+          echo "Godot Version: ${{ env.GODOT_VERSION }}"
+          echo "Android SDK: ${{ env.ANDROID_SDK_VERSION }}"
+          echo "Build Time: $(date)"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo ""
+          echo "=== Environment ==="
+          java -version
+          echo "Android SDK: $ANDROID_HOME"
+
+      - name: 🎉 Build Summary
+        if: success()
+        run: |
+          echo "================================="
+          echo "✅ BUILD SUCCESSFUL!"
+          echo "================================="
+          echo "Project: ${{ env.EXPORT_NAME }}"
+          echo "Version: 0.1.0"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo ""
+          echo "APK files are available in Artifacts section"
+          echo "================================="
+
+      - name: ❌ Build Failed
+        if: failure()
+        run: |
+          echo "================================="
+          echo "❌ BUILD FAILED!"
+          echo "================================="
+          echo "Please check the logs above for errors"
+          echo "================================="
