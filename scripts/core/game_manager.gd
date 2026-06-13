@@ -39,7 +39,7 @@ func _ready():
 	logger.info("GameManager initialized successfully", "GameManager")
 	
 	# Set up game loop
-	Engine.target_fps = Constants.TARGET_FPS
+	Engine.max_fps = 60
 	session_start_time = Time.get_ticks_msec()
 
 func _initialize_managers():
