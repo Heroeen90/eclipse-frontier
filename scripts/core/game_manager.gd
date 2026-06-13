@@ -1,7 +1,5 @@
 extends Node
 
-class_name GameManager
-
 # Singleton instance
 static var instance: GameManager
 
