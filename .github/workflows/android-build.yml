@@ -5,10 +5,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-22.04
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,42 +22,52 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y wget unzip
+          sudo apt-get install -y wget unzip zip adb
 
-      - name: Download Godot
+      - name: Download Godot 4.2.2
         run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip" -O godot.zip
+          wget -q \
+            "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_linux.x86_64.zip" \
+            -O godot.zip
           unzip -q godot.zip
-          mv Godot_v4.2.2-stable_linux.x86_64 godot
+          mv "Godot_v4.2.2-stable_linux.x86_64" godot
           chmod +x godot
-          echo "$(pwd)" >> $GITHUB_PATH
+          ls -la godot
+          echo "Godot downloaded"
 
       - name: Download Export Templates
         run: |
           mkdir -p ~/.local/share/godot/export_templates/4.2.2.stable
-          wget -q "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_export_templates.tpz" -O templates.tpz
-          unzip -q templates.tpz -d /tmp/
-          mv /tmp/templates/* ~/.local/share/godot/export_templates/4.2.2.stable/
+          wget -q \
+            "https://github.com/godotengine/godot/releases/download/4.2.2-stable/Godot_v4.2.2-stable_export_templates.tpz" \
+            -O templates.tpz
+          unzip -q templates.tpz -d /tmp/godot_templates
+          mv /tmp/godot_templates/templates/* \
+             ~/.local/share/godot/export_templates/4.2.2.stable/
           echo "Templates installed:"
-          ls ~/.local/share/godot/export_templates/4.2.2.stable/ | head -5
+          ls ~/.local/share/godot/export_templates/4.2.2.stable/ | grep android
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android NDK
+      - name: Install Android Build Tools
         run: |
-          sdkmanager "ndk;23.2.8568313"
-          echo "NDK_ROOT=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;23.2.8568313" 2>/dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.2.8568313" >> $GITHUB_ENV
+          echo "Android tools installed"
 
       - name: Create Debug Keystore
         run: |
-          mkdir -p android
+          mkdir -p "$HOME/android_keys"
           keytool -genkey -v \
-            -keystore android/debug.keystore \
+            -keystore "$HOME/android_keys/debug.keystore" \
             -alias androiddebugkey \
             -keyalg RSA \
             -keysize 2048 \
@@ -62,51 +75,140 @@ jobs:
             -storepass android \
             -keypass android \
             -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
-          echo "Keystore created"
+          echo "KEYSTORE_PATH=$HOME/android_keys/debug.keystore" >> $GITHUB_ENV
+          echo "Keystore ready"
 
-      - name: Setup Godot Android Config
+      - name: Configure Godot Editor Settings
         run: |
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.tres << EOF
-          [gd_resource type="EditorSettings" format=3]
-          
-          [resource]
-          export/android/android_sdk_path = "$ANDROID_HOME"
-          export/android/java_sdk_path = "/usr/lib/jvm/temurin-17-amd64"
-          EOF
-          echo "Godot config created"
+          cat > ~/.config/godot/editor_settings-4.tres << 'SETTINGS'
+[gd_resource type="EditorSettings" format=3]
 
-      - name: Import Project
+[resource]
+export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+export/android/java_sdk_path = "/usr/lib/jvm/temurin-17-amd64"
+export/android/debug_keystore = "/root/android_keys/debug.keystore"
+export/android/debug_keystore_user = "androiddebugkey"
+export/android/debug_keystore_pass = "android"
+SETTINGS
+          echo "Editor settings configured"
+          cat ~/.config/godot/editor_settings-4.tres
+
+      - name: Fix Export Presets
         run: |
-          ./godot --headless --path . --import --quit 2>&1 || true
-          echo "Import done"
-          sleep 5
+          cat > export_presets.cfg << 'PRESETS'
+[preset.0]
 
-      - name: Create Build Dir
-        run: mkdir -p build
+name="Android"
+platform="Android"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="build/eclipse-frontier.apk"
+encryption_include_filters=""
+encryption_exclude_filters=""
+encrypt_pck=false
+encrypt_directory=false
 
-      - name: Build APK
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+gradle_build/use_gradle_build=false
+gradle_build/export_format=0
+architectures/armeabi-v7a=true
+architectures/arm64-v8a=true
+architectures/x86=false
+architectures/x86_64=false
+keystore/debug="$HOME/android_keys/debug.keystore"
+keystore/debug_user="androiddebugkey"
+keystore/debug_password="android"
+keystore/release=""
+keystore/release_user=""
+keystore/release_password=""
+version/code=1
+version/name="0.1.0"
+package/unique_name="com.eclipsefrontier.game"
+package/name="Eclipse Frontier"
+package/signed=true
+package/classify_as_game=true
+screen/immersive_mode=true
+screen/support_small=false
+screen/support_normal=true
+screen/support_large=true
+screen/support_xlarge=true
+screen/keep_screen_on=true
+PRESETS
+          echo "Export presets updated"
+
+      - name: Create Build Directory
         run: |
-          ./godot --headless --path . \
+          mkdir -p build
+          echo "Build dir ready"
+
+      - name: Import Godot Project
+        run: |
+          timeout 120 ./godot \
+            --headless \
+            --path "$(pwd)" \
+            --import \
+            --quit-after 60 2>&1 | tail -20 || true
+          echo "Import step done"
+          sleep 3
+
+      - name: Show Project Files
+        run: |
+          echo "=== Project Root ==="
+          ls -la
+          echo "=== Scenes ==="
+          find scenes/ -name "*.tscn" 2>/dev/null | head -10 || echo "No scenes found"
+          echo "=== Scripts ==="
+          find scripts/ -name "*.gd" 2>/dev/null | wc -l || echo "0"
+          echo "=== Export Presets ==="
+          cat export_presets.cfg | head -10
+
+      - name: Build Android APK
+        run: |
+          set -e
+          echo "Starting build..."
+          ./godot \
+            --headless \
+            --path "$(pwd)" \
             --export-debug "Android" \
-            "build/eclipse-frontier.apk" 2>&1
-          echo "Build completed"
+            "$(pwd)/build/eclipse-frontier.apk" \
+            --verbose 2>&1
+          echo "Build command finished"
 
-      - name: Check APK
+      - name: Verify APK
         run: |
+          echo "=== Build folder contents ==="
+          ls -lah build/ || echo "Build folder empty"
+
           if [ -f "build/eclipse-frontier.apk" ]; then
-            SIZE=$(du -sh build/eclipse-frontier.apk | cut -f1)
-            echo "APK created successfully: $SIZE"
+            SIZE=$(du -sh "build/eclipse-frontier.apk" | cut -f1)
+            echo "SUCCESS: APK size = $SIZE"
           else
-            echo "APK not found, checking build folder:"
-            ls -la build/ || echo "Build folder empty"
+            echo "FAILED: APK not created"
             exit 1
           fi
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: eclipse-frontier-apk
           path: build/eclipse-frontier.apk
-          if-no-files-found: error
           retention-days: 30
+
+      - name: Upload Logs on Failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: |
+            ~/.local/share/godot/
+            ~/.config/godot/
+          retention-days: 7
